@@ -1,0 +1,13 @@
+[app]
+name = "StarName"
+category = "Apps"
+
+[entry]
+class = "StarNameApp"
+
+[metadata]
+author = "Nic"
+license = "MIT"
+url = "https://github.com/N1c0/tildagon-StarName/"
+description = "App to take your badge name and put it in stars. Name colour and star scene customisable"
+version = "1"

@@ -18,6 +18,13 @@ try:
 except Exception:
     tildagonos = None
 
+# Spaceagon touch ring: 12 pads in clock format, one over each LED
+# 2024 badge (no touch pads) still imports and runs unchanged
+try:
+    from frontboards.twentysix import TOUCH
+except Exception:
+    TOUCH = None
+
 # Disable default LED pattern. Re-enabled on exit so the badge returns to pattern set before opening
 try:
     from system.eventbus import eventbus
@@ -35,7 +42,8 @@ except Exception:
 SCREEN_R = 120          
 NUM_STARS = 55
 NUM_LEDS = 12
-LED_BRIGHTNESS = 0.6    # Change LED brightness
+NUM_TOUCH = 12          # Spaceagon touch ring: TOUCH01..TOUCH12 (clock format)
+LED_BRIGHTNESS = 0.6    # Starting LED brightness (0.0-1.0) adjustable with touch ring
 
 MODES = ("twinkle", "drift", "warp")   # cycle order
 
@@ -93,6 +101,7 @@ class StarNameApp(app.App):
 
         self.mode_index = 0
         self.colour_index = 0
+        self.led_brightness = LED_BRIGHTNESS   # live value, adjusted by the touch ring
         self.hints_visible = True
         self._first_frame = True
 
@@ -168,7 +177,7 @@ class StarNameApp(app.App):
     
     # Disable the current badge pattern     
     def _disable_pattern(self):
-        self._exiting = False           # we're taking the LEDs over again
+        self._exiting = False           
         if eventbus is not None and PatternDisable is not None:
             try:
                 eventbus.emit(PatternDisable())
@@ -179,7 +188,7 @@ class StarNameApp(app.App):
         if tildagonos is None or self._exiting:
             return
         r, g, b = NAME_COLOURS[self.colour_index]
-        m = 255 * LED_BRIGHTNESS
+        m = 255 * self.led_brightness
         col = (int(r * m), int(g * m), int(b * m))
         try:
             for i in range(1, NUM_LEDS + 1):
@@ -226,6 +235,20 @@ class StarNameApp(app.App):
             self._cycle_colour(1)
             self.hints_visible = False
             self._cooldown_until = time.ticks_add(now, SHAKE_COOLDOWN_MS)
+
+    # ---------- touch ring (brightness) ----------
+    # Treat the 12 clock-format pads as a radial dial: pad position -> brightness
+    def _check_touch(self):
+        if TOUCH is None:
+            return
+        b = self.button_states
+        held = [n for n in range(1, NUM_TOUCH + 1)
+                if b.get(TOUCH["TOUCH%02d" % n])]
+        if not held:
+            return
+        pos = sum(held) / len(held)            # 1.0 .. 12.0 around the ring
+        self.led_brightness = pos / NUM_TOUCH  # ~0.08 (dim) .. 1.0 (full)
+        self.hints_visible = False
 
     # ---------- motion ----------
     def _advance_drift(self, dt):
@@ -286,6 +309,7 @@ class StarNameApp(app.App):
             advance(dt)
 
         self._check_shake(now)
+        self._check_touch()
 
     # ---------- drawing ----------
     def draw(self, ctx):
@@ -394,6 +418,10 @@ class StarNameApp(app.App):
         ctx.rgb(0.6, 0.6, 0.6)
         ctx.move_to(0, HINT_Y - 9).text("change name colour")
         self._hint_line(ctx, "(C/E or shake)", HINT_Y + 9, DIR_E, DIR_C)
+
+        if TOUCH is not None:
+            ctx.rgb(0.6, 0.6, 0.6)
+            ctx.move_to(0, HINT_Y + 26).text("touch ring = brightness")
 
 
 __app_export__ = StarNameApp
